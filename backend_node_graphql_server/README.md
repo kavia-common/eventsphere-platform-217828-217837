@@ -42,7 +42,7 @@ Optional:
 
 Frontend expects:
 - HTTP: `${REACT_APP_BACKEND_URL}/graphql`
-- WS: `${REACT_APP_WS_URL}/graphql`
+- WS: `${REACT_APP_WS_URL}/graphql` (graphql-ws protocol)
 
 ## Authentication (JWT) and RBAC
 
@@ -98,3 +98,26 @@ mutation CreateEvent {
 
 - Ensure MongoDB is reachable (local or Atlas).
 - CORS_ORIGIN must include the frontend origin (e.g., http://localhost:3000).
+
+## GraphQL Subscriptions (WebSocket, graphql-ws)
+
+- WS endpoint: `${REACT_APP_WS_URL}/graphql` (same path as HTTP)
+- Protocol: graphql-ws
+- Auth: Send JWT using connectionParams with Authorization header semantics:
+  connectionParams: { Authorization: "Bearer <JWT>" }
+
+Example client (Apollo):
+const wsLink = new GraphQLWsLink(createClient({
+  url: `${REACT_APP_WS_URL}/graphql`,
+  connectionParams: () => {
+    const token = localStorage.getItem('auth_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+}));
+
+Available subscriptions:
+- subscription { eventUpdated { action id event { id title } } }
+- subscription($roomId: ID!) { messageAdded(roomId: $roomId) { id text user { id name } } }
+
+Environment:
+- WS_ENABLED=true enables the WebSocket server (default true).

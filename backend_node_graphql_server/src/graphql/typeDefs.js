@@ -99,6 +99,14 @@ export const typeDefs = gql`
     password: String!
   }
 
+  """
+  Event updates across the system.
+  action values:
+  - created: new event created
+  - updated: event fields changed
+  - deleted: event removed
+  - registration_changed: RSVP or attendee count changed
+  """
   type EventUpdatedPayload {
     action: String!
     id: ID!

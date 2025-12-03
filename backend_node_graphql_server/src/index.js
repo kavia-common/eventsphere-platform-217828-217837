@@ -6,13 +6,18 @@ import { connectDatabase, disconnectDatabase } from './db/connection.js';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { typeDefs } from './graphql/typeDefs.js';
-import { createResolvers } from './graphql/resolvers.js';
+import { createResolvers, getPubSub } from './graphql/resolvers.js';
 import { buildContext } from './graphql/context.js';
+import { createServer } from 'http';
+import { useServer } from 'graphql-ws/lib/use/ws';
+import { WebSocketServer } from 'ws';
+import { getAuthFromRequest } from './utils/auth.js';
 
 // Load env and configuration
 const PORT = Number(getEnv('PORT', 4000));
 const NODE_ENV = getEnv('NODE_ENV', 'development');
 const HEALTHCHECK_PATH = getEnv('HEALTHCHECK_PATH', '/healthz');
+const WS_ENABLED = String(getEnv('WS_ENABLED', 'true')).toLowerCase() !== 'false';
 
 // For CORS, allow the frontend origin; fallback to wildcard for dev.
 const FRONTEND_ORIGIN = getEnv('REACT_APP_FRONTEND_URL', '');
@@ -53,6 +58,7 @@ app.get(HEALTHCHECK_PATH, async (req, res) => {
     env: NODE_ENV,
     time: new Date().toISOString(),
     db: 'unknown',
+    ws: WS_ENABLED ? 'enabled' : 'disabled',
   };
 
   try {
@@ -70,6 +76,7 @@ app.get('/', (req, res) => {
   res.json({
     name: 'EventSphere Backend',
     message: 'GraphQL endpoint is available at /graphql',
+    ws: WS_ENABLED ? 'GraphQL WS endpoint available at /graphql' : 'WS disabled',
     healthcheck: HEALTHCHECK_PATH,
   });
 });
@@ -79,13 +86,16 @@ async function start() {
   try {
     await connectDatabase();
 
-    // Initialize Apollo Server 4 with Express at /graphql
+    // Initialize Apollo Server 4 for HTTP
     const server = new ApolloServer({
       typeDefs,
       resolvers: createResolvers(),
       introspection: NODE_ENV !== 'production',
     });
     await server.start();
+
+    // Create HTTP server to attach both Express and WebSocket server
+    const httpServer = createServer(app);
 
     app.use(
       '/graphql',
@@ -101,15 +111,57 @@ async function start() {
       })
     );
 
-    const httpServer = app.listen(PORT, () => {
+    // WS server for subscriptions via graphql-ws
+    let wsServer;
+    let wsCleanup;
+    if (WS_ENABLED) {
+      wsServer = new WebSocketServer({
+        server: httpServer,
+        path: '/graphql',
+      });
+
+      wsCleanup = useServer(
+        {
+          schema: server.schema,
+          // PUBLIC_INTERFACE
+          onConnect: async (ctx) => {
+            // Read connectionParams.Authorization like "Bearer <token>"
+            const authHeader =
+              ctx.connectionParams?.Authorization ||
+              ctx.connectionParams?.authorization ||
+              '';
+            const reqLike = { headers: { authorization: authHeader } };
+            const { user } = getAuthFromRequest(reqLike);
+            ctx.extra.user = user || null;
+            return true;
+          },
+          context: (ctx, _msg, _args) => {
+            // Expose same shape as HTTP context
+            return { user: ctx.extra.user, pubsub: getPubSub() };
+          },
+        },
+        wsServer
+      );
+    }
+
+    httpServer.listen(PORT, () => {
       // eslint-disable-next-line no-console
-      console.log(`[startup] Server listening on port ${PORT} (env=${NODE_ENV})`);
+      console.log(
+        `[startup] Server listening on port ${PORT} (env=${NODE_ENV}) ${
+          WS_ENABLED ? 'with WS /graphql' : ''
+        }`
+      );
     });
 
     // Graceful shutdown
     const shutdown = async (signal) => {
       // eslint-disable-next-line no-console
       console.log(`[shutdown] Received ${signal}, closing server...`);
+      try {
+        if (wsCleanup) {
+          await wsCleanup.dispose?.();
+        }
+      } catch {}
       httpServer.close(async () => {
         try {
           await server.stop();

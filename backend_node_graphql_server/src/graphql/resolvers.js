@@ -1,6 +1,21 @@
 import mongoose from 'mongoose';
+import { PubSub } from 'graphql-subscriptions';
 import { User, Event, Registration, Message } from '../models/index.js';
 import { comparePassword, hashPassword, signToken } from '../utils/auth.js';
+
+const pubsub = new PubSub();
+const TOPICS = {
+  EVENT_UPDATED: 'EVENT_UPDATED',
+  MESSAGE_ADDED: 'MESSAGE_ADDED',
+};
+
+/**
+ * PUBLIC_INTERFACE
+ * Expose PubSub instance for WS context and testing.
+ */
+export function getPubSub() {
+  return pubsub;
+}
 
 /**
  * PUBLIC_INTERFACE
@@ -113,6 +128,19 @@ export const createResolvers = () => ({
       };
       const doc = await Event.create(payload);
       const populated = await Event.findById(doc._id).populate('organizer').lean();
+
+      // Publish event created
+      await pubsub.publish(TOPICS.EVENT_UPDATED, {
+        eventUpdated: {
+          action: 'created',
+          id: populated._id.toString(),
+          event: {
+            id: populated._id.toString(),
+            ...mapEventDoc(populated),
+          },
+        },
+      });
+
       return {
         id: populated._id.toString(),
         ...mapEventDoc(populated),
@@ -147,6 +175,21 @@ export const createResolvers = () => ({
         const reg = await Registration.findOne({ event: doc._id, user: ctx.user.id }).lean();
         myRsvp = reg?.status || null;
       }
+
+      // Publish event updated
+      await pubsub.publish(TOPICS.EVENT_UPDATED, {
+        eventUpdated: {
+          action: 'updated',
+          id: doc._id.toString(),
+          event: {
+            id: doc._id.toString(),
+            ...mapEventDoc(doc),
+            attendeesCount,
+            myRsvp,
+          },
+        },
+      });
+
       return {
         id: doc._id.toString(),
         ...mapEventDoc(doc),
@@ -166,6 +209,16 @@ export const createResolvers = () => ({
       await Event.findByIdAndDelete(id);
       await Registration.deleteMany({ event: id });
       await Message.deleteMany({ event: id });
+
+      // Publish event deleted
+      await pubsub.publish(TOPICS.EVENT_UPDATED, {
+        eventUpdated: {
+          action: 'deleted',
+          id: String(id),
+          event: null,
+        },
+      });
+
       return true;
     },
 
@@ -180,6 +233,21 @@ export const createResolvers = () => ({
         { upsert: true, new: true }
       );
       const attendeesCount = await Registration.countDocuments({ event: eventId });
+
+      // Publish event RSVP change as update
+      await pubsub.publish(TOPICS.EVENT_UPDATED, {
+        eventUpdated: {
+          action: 'registration_changed',
+          id: ev._id.toString(),
+          event: {
+            id: ev._id.toString(),
+            ...mapEventDoc(ev),
+            attendeesCount,
+            myRsvp: status,
+          },
+        },
+      });
+
       return {
         id: ev._id.toString(),
         ...mapEventDoc(ev),
@@ -229,20 +297,24 @@ export const createResolvers = () => ({
       }
       const msg = await Message.create(payload);
       const populated = await Message.findById(msg._id).populate('user').populate('event').lean();
-      return mapMessageDoc(populated);
+      const mapped = mapMessageDoc(populated);
+
+      // Publish messageAdded for the specific room
+      await pubsub.publish(`${TOPICS.MESSAGE_ADDED}.${roomId}`, { messageAdded: mapped });
+
+      return mapped;
     },
   },
 
   Subscription: {
     eventUpdated: {
-      subscribe: () => {
-        throw new Error('Subscriptions not yet enabled');
-      },
+      // PUBLIC_INTERFACE
+      subscribe: () => pubsub.asyncIterator([TOPICS.EVENT_UPDATED]),
     },
     messageAdded: {
-      subscribe: () => {
-        throw new Error('Subscriptions not yet enabled');
-      },
+      // PUBLIC_INTERFACE
+      subscribe: (_root, { roomId }) =>
+        pubsub.asyncIterator([`${TOPICS.MESSAGE_ADDED}.${roomId}`]),
     },
   },
 });
