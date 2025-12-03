@@ -33,7 +33,7 @@ See .env.example for details. Required:
 Optional:
 - PORT (default 4000)
 - NODE_ENV (development|production|test)
-- CORS_ORIGIN (comma-separated origins or * for any)
+- CORS_ORIGIN (comma-separated origins or * for any). Must include http://localhost:3000 for local dev.
 - WS_ENABLED (true|false)
 - HEALTHCHECK_PATH (default /healthz)
 - LOG_LEVEL (silent|error|warn|info|debug|trace)  Controls pino log level

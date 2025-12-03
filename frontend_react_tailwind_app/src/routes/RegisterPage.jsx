@@ -10,7 +10,12 @@ import { REGISTER_MUTATION } from '../graphql/mutations';
  */
 export default function RegisterPage() {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
-  const [registerMutation, { loading }] = useMutation(REGISTER_MUTATION);
+  const [registerMutation, { loading }] = useMutation(REGISTER_MUTATION, {
+    onError: (networkError) => {
+      // eslint-disable-next-line no-console
+      console.error('[register] Network/Apollo error:', networkError);
+    },
+  });
   const navigate = useNavigate();
 
   const setField = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -21,8 +26,15 @@ export default function RegisterPage() {
       await registerMutation({ variables: { input: form } });
       navigate('/login');
     } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[register] Mutation failed', {
+        message: err?.message,
+        name: err?.name,
+        networkError: err?.networkError,
+        graphQLErrors: err?.graphQLErrors,
+      });
       // eslint-disable-next-line no-alert
-      alert(`Registration failed: ${err.message}`);
+      alert(`Registration failed: ${err?.message || 'Unexpected error'}`);
     }
   };
 

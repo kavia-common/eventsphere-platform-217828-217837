@@ -10,12 +10,15 @@ Modern, responsive React SPA for the EventSphere platform. Connects to a GraphQL
 2) Configure environment
    - Copy .env.example to .env
    - Set the following at minimum:
-     - REACT_APP_BACKEND_URL: HTTP base of your GraphQL server (Apollo uses `${REACT_APP_BACKEND_URL}/graphql`)
-       - Dev example: http://localhost:4000
-       - Render/Prod example: https://your-backend.onrender.com
-     - REACT_APP_WS_URL: WS base for subscriptions (Apollo uses `${REACT_APP_WS_URL}/graphql`)
-       - Dev example: ws://localhost:4000
-       - With SSL: wss://your-backend.onrender.com
+     - REACT_APP_BACKEND_URL: HTTP base of your GraphQL server (Apollo uses `${REACT_APP_BACKEND_URL}/graphql` if not present)
+       - Dev example: http://localhost:4000 (http, not ws)
+       - You may also set the full path: http://localhost:4000/graphql
+       - Render/Prod example: https://your-backend.onrender.com (or full path with /graphql)
+     - REACT_APP_WS_URL: WS base for subscriptions (Apollo uses `${REACT_APP_WS_URL}/graphql` if not present)
+       - Dev example: ws://localhost:4000 (use ws:// for local HTTP)
+       - With SSL: wss://your-backend.onrender.com (use wss:// when frontend is https)
+   - Mixed content: If the frontend runs on https, the HTTP endpoint must also be https (or use a proxy) to avoid mixed-content blocking.
+   - Diagnostics: In development, Apollo prints the resolved HTTP and WS URLs to the console for troubleshooting.
    - Optional: Adjust REACT_APP_API_BASE, REACT_APP_FRONTEND_URL, and other flags to suit your environment.
    - Ensure backend CORS_ORIGIN includes your frontend origin (e.g., http://localhost:3000) and that both expose/expect /graphql for HTTP and WS.
 

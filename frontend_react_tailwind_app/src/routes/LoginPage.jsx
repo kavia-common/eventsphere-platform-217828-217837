@@ -10,7 +10,12 @@ import { LOGIN_MUTATION } from '../graphql/mutations';
  */
 export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' });
-  const [loginMutation, { loading }] = useMutation(LOGIN_MUTATION);
+  const [loginMutation, { loading }] = useMutation(LOGIN_MUTATION, {
+    onError: (networkError) => {
+      // eslint-disable-next-line no-console
+      console.error('[login] Network/Apollo error:', networkError);
+    },
+  });
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,8 +35,15 @@ export default function LoginPage() {
         });
       }
     } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[login] Mutation failed', {
+        message: err?.message,
+        name: err?.name,
+        networkError: err?.networkError,
+        graphQLErrors: err?.graphQLErrors,
+      });
       // eslint-disable-next-line no-alert
-      alert(`Login failed: ${err.message}`);
+      alert(`Login failed: ${err?.message || 'Unexpected error'}`);
     }
   };
 

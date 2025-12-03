@@ -12,8 +12,25 @@ import { createClient } from 'graphql-ws';
 
 // PUBLIC_INTERFACE
 export const createApolloClient = () => {
-  const httpUrl = `${process.env.REACT_APP_BACKEND_URL?.replace(/\/$/, '')}/graphql`;
-  const wsUrl = `${process.env.REACT_APP_WS_URL?.replace(/\/$/, '')}/graphql`;
+  // Build endpoint URLs safely:
+  // - If the env already ends with /graphql, use as-is.
+  // - Otherwise, append /graphql.
+  const withGraphqlPath = (base) => {
+    if (!base) return undefined;
+    const trimmed = base.replace(/\/$/, '');
+    return trimmed.endsWith('/graphql') ? trimmed : `${trimmed}/graphql`;
+  };
+
+  const httpUrl = withGraphqlPath(process.env.REACT_APP_BACKEND_URL);
+  const wsUrl = withGraphqlPath(process.env.REACT_APP_WS_URL);
+
+  // Lightweight runtime diagnostics to help troubleshoot network issues in previews
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.debug('[apollo] HTTP URL:', httpUrl);
+    // eslint-disable-next-line no-console
+    console.debug('[apollo] WS URL:', wsUrl);
+  }
 
   // Attach Authorization header from localStorage for HTTP requests
   const authHttpLink = new HttpLink({
