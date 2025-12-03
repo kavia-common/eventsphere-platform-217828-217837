@@ -17,6 +17,7 @@ Modern, responsive React SPA for the EventSphere platform. Connects to a GraphQL
      - REACT_APP_WS_URL: WS base for subscriptions (Apollo uses `${REACT_APP_WS_URL}/graphql` if not present)
        - Dev example: ws://localhost:4000 (use ws:// for local HTTP)
        - With SSL: wss://your-backend.onrender.com (use wss:// when frontend is https)
+       - Important: Do NOT append custom path segments like /ws. The WS server is exposed at /graphql. The client ensures the final path is exactly /graphql.
    - Mixed content: If the frontend runs on https, the HTTP endpoint must also be https (or use a proxy) to avoid mixed-content blocking.
    - Diagnostics: In development, Apollo prints the resolved HTTP and WS URLs to the console for troubleshooting.
    - Optional: Adjust REACT_APP_API_BASE, REACT_APP_FRONTEND_URL, and other flags to suit your environment.

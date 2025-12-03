@@ -5,24 +5,47 @@ import { createClient } from 'graphql-ws';
 
 /**
  * Apollo Client factory with HTTP and WebSocket split links.
- * - HTTP: queries/mutations to REACT_APP_BACKEND_URL/graphql
- * - WS: subscriptions to REACT_APP_WS_URL/graphql
+ * - HTTP: queries/mutations to <httpBase>/graphql
+ * - WS: subscriptions to <wsBase>/graphql
  * - Includes auth header using token from localStorage (if present).
  */
 
 // PUBLIC_INTERFACE
 export const createApolloClient = () => {
-  // Build endpoint URLs safely:
-  // - If the env already ends with /graphql, use as-is.
-  // - Otherwise, append /graphql.
+  // Normalize a base URL and ensure it points exactly to /graphql (only once).
   const withGraphqlPath = (base) => {
     if (!base) return undefined;
-    const trimmed = base.replace(/\/$/, '');
-    return trimmed.endsWith('/graphql') ? trimmed : `${trimmed}/graphql`;
+    // Remove trailing slashes
+    let trimmed = base.replace(/\/+$/, '');
+    // If the base already includes /graphql, strip any trailing segments after it
+    const idx = trimmed.indexOf('/graphql');
+    if (idx !== -1) {
+      return trimmed.slice(0, idx + '/graphql'.length);
+    }
+    return `${trimmed}/graphql`;
   };
 
-  const httpUrl = withGraphqlPath(process.env.REACT_APP_BACKEND_URL);
-  const wsUrl = withGraphqlPath(process.env.REACT_APP_WS_URL);
+  // Prefer a single API base if provided, else use specific ones
+  const apiBase = process.env.REACT_APP_API_BASE;
+  let httpBase = process.env.REACT_APP_BACKEND_URL || apiBase;
+  let wsBase = process.env.REACT_APP_WS_URL || apiBase;
+
+  // If frontend is served via https and wsBase mistakenly uses ws://, upgrade to wss:// to avoid mixed content.
+  try {
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && wsBase?.startsWith('ws://')) {
+      wsBase = wsBase.replace(/^ws:\/\//, 'wss://');
+    }
+    // If httpBase is http while frontend is https, advise in console (CORS/mixed content)
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && httpBase?.startsWith('http://')) {
+      // eslint-disable-next-line no-console
+      console.warn('[apollo] Frontend is https but REACT_APP_BACKEND_URL is http. Use https backend to avoid mixed content.');
+    }
+  } catch {
+    // ignore
+  }
+
+  const httpUrl = withGraphqlPath(httpBase);
+  const wsUrl = withGraphqlPath(wsBase);
 
   // Lightweight runtime diagnostics to help troubleshoot network issues in previews
   if (process.env.NODE_ENV !== 'production') {
@@ -84,9 +107,7 @@ export const createApolloClient = () => {
   const client = new ApolloClient({
     link,
     cache: new InMemoryCache(),
-    // New Apollo devtools integration option replaces deprecated connectToDevTools
     devtools: {
-      // Use standard NODE_ENV to align with CRA and Apollo tooling
       enabled: process.env.NODE_ENV !== 'production',
     },
   });
