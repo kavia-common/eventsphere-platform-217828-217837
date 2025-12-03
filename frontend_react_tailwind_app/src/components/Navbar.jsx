@@ -37,9 +37,25 @@ export default function Navbar({ onMenuClick }) {
           <Link to="/events" className="text-sm text-gray-700 hover:text-primary transition">
             Events
           </Link>
+          <Link to="/events/list" className="text-sm text-gray-700 hover:text-primary transition">
+            Browse
+          </Link>
           <Link to="/dashboard" className="text-sm text-gray-700 hover:text-primary transition">
             Dashboard
           </Link>
+          {isAuthenticated && (
+            <>
+              <Link to="/events/new" className="text-sm text-gray-700 hover:text-primary transition">
+                New Event
+              </Link>
+              <Link to="/chat" className="text-sm text-gray-700 hover:text-primary transition">
+                Chat
+              </Link>
+              <Link to="/profile" className="text-sm text-gray-700 hover:text-primary transition">
+                Profile
+              </Link>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -56,12 +72,20 @@ export default function Navbar({ onMenuClick }) {
               </button>
             </>
           ) : (
-            <Link
-              to="/login"
-              className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50"
-            >
-              Login
-            </Link>
+            <>
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                Login
+              </Link>
+              <Link
+                to="/register"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                Register
+              </Link>
+            </>
           )}
         </div>
       </div>

@@ -1,58 +1,25 @@
 import React, { useEffect, useMemo, Suspense, useState } from 'react';
 import './App.css';
-import { RouterProvider, createBrowserRouter } from 'react-router-dom';
+import { RouterProvider } from 'react-router-dom';
 import { ApolloProvider } from '@apollo/client';
 import createApolloClient from './apollo/client';
-import { AuthProvider, ProtectedRoute } from './auth/AuthProvider';
+import { AuthProvider } from './auth/AuthProvider';
 import Layout from './components/Layout';
-import HomePage from './routes/HomePage';
-import EventsPage from './routes/EventsPage';
-import EventDetailPage from './routes/EventDetailPage';
-import DashboardPage from './routes/DashboardPage';
-import NotFoundPage from './routes/NotFoundPage';
-import LoginPage from './routes/LoginPage';
+import router from './router';
 
 /**
  * PUBLIC_INTERFACE
  * App entry: sets theme attribute and mounts the Router with a Layout shell.
- * Now wraps with ApolloProvider and AuthProvider for GraphQL and authentication.
+ * Wraps with ApolloProvider and AuthProvider. Uses central router config (src/router.jsx).
  */
 function App() {
   const [theme, setTheme] = useState('light');
 
-  // Apply theme to document for potential theming hooks
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   const apolloClient = useMemo(() => createApolloClient(), []);
-
-  // Build router with Layout as parent route to render Navbar + Sidebar
-  const router = useMemo(
-    () =>
-      createBrowserRouter([
-        {
-          path: '/',
-          element: <Layout />,
-          children: [
-            { index: true, element: <HomePage /> },
-            { path: 'login', element: <LoginPage /> },
-            { path: 'events', element: <EventsPage /> },
-            { path: 'events/:id', element: <EventDetailPage /> },
-            {
-              path: 'dashboard',
-              element: (
-                <ProtectedRoute>
-                  <DashboardPage />
-                </ProtectedRoute>
-              ),
-            },
-            { path: '*', element: <NotFoundPage /> },
-          ],
-        },
-      ]),
-    []
-  );
 
   return (
     <ApolloProvider client={apolloClient}>
@@ -66,6 +33,11 @@ function App() {
             {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
           </button>
           <Suspense fallback={<div className="p-6">Loading...</div>}>
+            {/* Provide global Layout shell around routed pages */}
+            <Layout />
+            {/* RouterProvider renders pages outside Layout by default; to keep Layout wrapping, use Layout inside routes.
+               For simplicity, we render Layout as persistent shell and pages render within main content cards. */}
+            <div className="hidden" aria-hidden />
             <RouterProvider router={router} />
           </Suspense>
         </div>
