@@ -1,13 +1,24 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base document styling aligned with Ocean Professional palette */
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    @apply antialiased bg-gradient-to-r from-blue-500/10 to-gray-50 text-gray-900;
+    margin: 0;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Example utility components (optional, lightweight) */
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-white shadow-soft transition hover:opacity-90;
+  }
+  .card {
+    @apply rounded-xl bg-white shadow-soft border border-gray-100;
+  }
 }

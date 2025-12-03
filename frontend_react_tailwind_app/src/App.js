@@ -18,7 +18,7 @@ function App() {
 
   return (
     <div className="App">
-      <header className="App-header">
+      <header className="App-header bg-ocean-fade">
         <button 
           className="theme-toggle" 
           onClick={toggleTheme}
