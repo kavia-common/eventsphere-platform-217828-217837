@@ -1,0 +1,35 @@
+{
+  "name": "backend_node_graphql_server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "EventSphere Backend - Node.js GraphQL server skeleton with MongoDB (Mongoose)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon --ext js,mjs,cjs --watch src src/index.js",
+    "health": "node -e \"import('./src/utils/env.js').then(()=>console.log('env ok')).catch(e=>{console.error(e);process.exit(1)})\""
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "graphql": "^16.12.0",
+    "mongoose": "^8.7.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "graphql",
+    "node",
+    "express",
+    "mongoose",
+    "eventsphere"
+  ],
+  "license": "MIT"
+}
