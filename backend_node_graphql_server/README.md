@@ -51,6 +51,7 @@ This skeleton does not yet expose /graphql. In future steps, add Apollo Server o
 - npm start  Start server (prod)
 - npm run dev  Start with nodemon
 - npm run health  Quick env validation
+- npm run seed  Seed sample users, events, registrations, and messages (idempotent)
 
 ## Notes
 

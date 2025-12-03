@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon --ext js,mjs,cjs --watch src src/index.js",
-    "health": "node -e \"import('./src/utils/env.js').then(()=>console.log('env ok')).catch(e=>{console.error(e);process.exit(1)})\""
+    "health": "node -e \"import('./src/utils/env.js').then(()=>console.log('env ok')).catch(e=>{console.error(e);process.exit(1)})\"",
+    "seed": "node scripts/seed.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
