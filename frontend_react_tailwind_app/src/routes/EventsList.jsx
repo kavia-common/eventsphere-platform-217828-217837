@@ -1,37 +1,48 @@
 import React, { useMemo, useState } from 'react';
+import { useQuery } from '@apollo/client';
 import EventCard from '../components/EventCard';
 import { TextInput, DateInput, Select } from '../components/inputs';
+import { EVENTS_BROWSE_QUERY } from '../graphql/queries';
 
 /**
  * PUBLIC_INTERFACE
- * EventsList: Displays searchable/filterable list of events.
+ * EventsList: Displays searchable/filterable list of events via GraphQL.
  */
 export default function EventsList() {
-  const allEvents = useMemo(
-    () => [
-      { id: '1', title: 'React Summit 2025', date: '2025-12-12', location: 'Online', tags: ['React', 'Frontend'], type: 'online' },
-      { id: '2', title: 'GraphQL Live', date: '2025-12-20', location: 'San Francisco, CA', tags: ['GraphQL', 'API'], type: 'in-person' },
-      { id: '3', title: 'Tailwind Mastery Workshop', date: '2026-01-05', location: 'Remote', tags: ['TailwindCSS', 'Design Systems'], type: 'online' },
-    ],
-    []
-  );
-
   const [q, setQ] = useState('');
   const [type, setType] = useState('all');
   const [after, setAfter] = useState('');
 
-  const filtered = allEvents.filter((e) => {
-    const matchesQ = q ? e.title.toLowerCase().includes(q.toLowerCase()) || e.location.toLowerCase().includes(q.toLowerCase()) : true;
-    const matchesType = type === 'all' ? true : e.type === type;
-    const matchesDate = after ? e.date >= after : true;
-    return matchesQ && matchesType && matchesDate;
+  // Map UI type to backend filter (send null/undefined when "all")
+  const vars = useMemo(
+    () => ({
+      query: q || null,
+      type: type === 'all' ? null : type,
+      afterDate: after || null,
+      limit: 24,
+      offset: 0,
+    }),
+    [q, type, after]
+  );
+
+  const { data, loading, error, refetch } = useQuery(EVENTS_BROWSE_QUERY, {
+    variables: vars,
+    fetchPolicy: 'cache-and-network',
   });
+
+  const events = data?.events ?? [];
 
   return (
     <div className="p-6">
       <div className="flex items-end flex-wrap gap-4 mb-5">
         <div className="w-full sm:w-64">
-          <TextInput label="Search" name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search events..." />
+          <TextInput
+            label="Search"
+            name="q"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search events..."
+          />
         </div>
         <div className="w-full sm:w-52">
           <Select
@@ -43,16 +54,37 @@ export default function EventsList() {
               { value: 'all', label: 'All' },
               { value: 'in-person', label: 'In-person' },
               { value: 'online', label: 'Online' },
+              { value: 'hybrid', label: 'Hybrid' },
             ]}
           />
         </div>
         <div className="w-full sm:w-56">
-          <DateInput label="After date" name="after" value={after} onChange={(e) => setAfter(e.target.value)} type="date" />
+          <DateInput
+            label="After date"
+            name="after"
+            value={after}
+            onChange={(e) => setAfter(e.target.value)}
+            type="date"
+          />
         </div>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => refetch(vars)}
+        >
+          Apply
+        </button>
       </div>
 
+      {loading && <div>Loading events…</div>}
+      {error && (
+        <div className="text-error">
+          Failed to load events: {error.message}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filtered.map((ev) => (
+        {events.map((ev) => (
           <EventCard
             key={ev.id}
             id={ev.id}
@@ -63,6 +95,9 @@ export default function EventsList() {
             onRegister={() => alert(`Registered for ${ev.title}`)}
           />
         ))}
+        {!loading && events.length === 0 && (
+          <div className="text-gray-600">No events found.</div>
+        )}
       </div>
     </div>
   );

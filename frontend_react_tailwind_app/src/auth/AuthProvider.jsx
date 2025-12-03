@@ -1,20 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useQuery, gql } from '@apollo/client';
+import { useQuery } from '@apollo/client';
 import { Navigate, useLocation } from 'react-router-dom';
-
-/**
- * Minimal 'me' query placeholder to validate authentication and fetch user profile.
- * Replace fields with those provided by your backend schema.
- */
-export const ME_QUERY = gql`
-  query Me {
-    me {
-      id
-      email
-      name
-    }
-  }
-`;
+import { ME_QUERY } from '../graphql/queries';
 
 const AuthContext = createContext(null);
 
