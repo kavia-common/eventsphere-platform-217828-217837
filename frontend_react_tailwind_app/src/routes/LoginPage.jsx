@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { startTransition, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation } from '@apollo/client';
 import { useAuth } from '../auth/AuthProvider';
@@ -24,7 +24,10 @@ export default function LoginPage() {
       const token = data?.login?.token;
       if (token) {
         await auth.login(token);
-        navigate(from, { replace: true });
+        // Transition the navigation to avoid synchronous input suspends
+        startTransition(() => {
+          navigate(from, { replace: true });
+        });
       }
     } catch (err) {
       // eslint-disable-next-line no-alert

@@ -1,7 +1,8 @@
-import React, { lazy } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import { ProtectedRoute } from './auth/AuthProvider';
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Lazy load pages
 const HomePage = lazy(() => import('./routes/HomePage'));
@@ -16,30 +17,41 @@ const LoginPage = lazy(() => import('./routes/LoginPage'));
 const RegisterPage = lazy(() => import('./routes/RegisterPage'));
 const NotFoundPage = lazy(() => import('./routes/NotFoundPage'));
 
+const suspenseWrap = (node) => (
+  <Suspense fallback={<div className="p-6">Loading…</div>}>{node}</Suspense>
+);
+
 // PUBLIC_INTERFACE
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Layout />,
+    element: (
+      <ErrorBoundary>
+        <Layout />
+      </ErrorBoundary>
+    ),
+    errorElement: (
+      <ErrorBoundary />
+    ),
     children: [
-      { index: true, element: <HomePage />, handle: { title: 'Home' } },
-      { path: 'login', element: <LoginPage />, handle: { title: 'Login' } },
-      { path: 'register', element: <RegisterPage />, handle: { title: 'Register' } },
-      { path: 'events', element: <EventsPage />, handle: { title: 'Events' } },
-      { path: 'events/list', element: <EventsList />, handle: { title: 'Browse Events' } },
+      { index: true, element: suspenseWrap(<HomePage />), handle: { title: 'Home' } },
+      { path: 'login', element: suspenseWrap(<LoginPage />), handle: { title: 'Login' } },
+      { path: 'register', element: suspenseWrap(<RegisterPage />), handle: { title: 'Register' } },
+      { path: 'events', element: suspenseWrap(<EventsPage />), handle: { title: 'Events' } },
+      { path: 'events/list', element: suspenseWrap(<EventsList />), handle: { title: 'Browse Events' } },
       {
         path: 'events/new',
-        element: (
+        element: suspenseWrap(
           <ProtectedRoute to="/login">
             <CreateEditEvent />
           </ProtectedRoute>
         ),
         handle: { title: 'Create Event' },
       },
-      { path: 'events/:id', element: <EventDetails />, handle: { title: 'Event Details' } },
+      { path: 'events/:id', element: suspenseWrap(<EventDetails />), handle: { title: 'Event Details' } },
       {
         path: 'dashboard',
-        element: (
+        element: suspenseWrap(
           <ProtectedRoute to="/login">
             <DashboardPage />
           </ProtectedRoute>
@@ -48,7 +60,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'profile',
-        element: (
+        element: suspenseWrap(
           <ProtectedRoute to="/login">
             <Profile />
           </ProtectedRoute>
@@ -57,14 +69,14 @@ export const router = createBrowserRouter([
       },
       {
         path: 'chat',
-        element: (
+        element: suspenseWrap(
           <ProtectedRoute to="/login">
             <ChatRoom />
           </ProtectedRoute>
         ),
         handle: { title: 'Chat Room' },
       },
-      { path: '*', element: <NotFoundPage />, handle: { title: 'Not Found' } },
+      { path: '*', element: suspenseWrap(<NotFoundPage />), handle: { title: 'Not Found' } },
     ],
   },
 ]);

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { startTransition } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 
@@ -11,13 +11,27 @@ import { useAuth } from '../auth/AuthProvider';
 export default function Navbar({ onMenuClick }) {
   const { user, isAuthenticated, logout } = useAuth();
 
+  const safeMenuClick = () => {
+    // Wrap sidebar toggling in transition to avoid blocking urgent updates during routing
+    startTransition(() => {
+      onMenuClick?.();
+    });
+  };
+
+  const onLogout = () => {
+    // Logout may cause data refetch/suspense via Apollo + auth context; make it a transition.
+    startTransition(() => {
+      logout();
+    });
+  };
+
   return (
     <nav className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-gray-200">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             className="md:hidden inline-flex items-center justify-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50"
-            onClick={onMenuClick}
+            onClick={safeMenuClick}
             aria-label="Toggle sidebar menu"
           >
             ☰
@@ -66,7 +80,7 @@ export default function Navbar({ onMenuClick }) {
               </span>
               <button
                 className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50"
-                onClick={logout}
+                onClick={onLogout}
               >
                 Logout
               </button>
