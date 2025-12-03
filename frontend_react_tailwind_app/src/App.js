@@ -7,9 +7,10 @@ import { AuthProvider } from './auth/AuthProvider';
 /**
  * PUBLIC_INTERFACE
  * App entry: sets theme attribute and provides global app providers.
- * Router is mounted at entry (src/index.js) and routes are wrapped with Layout via router.jsx.
+ * This component WRAPS its children with ApolloProvider and AuthProvider so any routed UI
+ * (including Layout/Navbar/Sidebar) has access to both contexts.
  */
-function App() {
+function App({ children }) {
   const [theme, setTheme] = useState('light');
 
   useEffect(() => {
@@ -29,7 +30,7 @@ function App() {
           >
             {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
           </button>
-          {/* Routes and Layout are rendered by RouterProvider in index.js and defined in router.jsx */}
+          {children}
         </div>
       </AuthProvider>
     </ApolloProvider>
