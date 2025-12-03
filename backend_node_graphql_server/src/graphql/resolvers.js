@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { PubSub } from 'graphql-subscriptions';
 import { User, Event, Registration, Message } from '../models/index.js';
 import { comparePassword, hashPassword, signToken } from '../utils/auth.js';
+import { errors as Err } from '../utils/errors.js';
 
 const pubsub = new PubSub();
 const TOPICS = {
@@ -43,13 +44,17 @@ export const createResolvers = () => ({
         .sort({ date: 1, startDate: 1, createdAt: -1 })
         .skip(offset)
         .limit(Math.min(limit, 100))
-        .populate('organizer')
         .lean();
 
       const ids = docs.map((d) => d._id);
-      const counts = await Registration.aggregate([
-        { $match: { event: { $in: ids } } },
-        { $group: { _id: '$event', c: { $sum: 1 } } },
+      const organizerIds = docs.map((d) => String(d.organizer));
+      // Batch attendees count via aggregation (kept), and load organizers via DataLoader
+      const [counts, organizers] = await Promise.all([
+        Registration.aggregate([
+          { $match: { event: { $in: ids } } },
+          { $group: { _id: '$event', c: { $sum: 1 } } },
+        ]),
+        Promise.all(organizerIds.map((id) => ctx.loaders.userById.load(id))),
       ]);
       const countMap = new Map(counts.map((c) => [String(c._id), c.c]));
       let myRegsMap = new Map();
@@ -57,30 +62,35 @@ export const createResolvers = () => ({
         const myRegs = await Registration.find({ event: { $in: ids }, user: ctx.user.id }).lean();
         myRegsMap = new Map(myRegs.map((r) => [String(r.event), r.status]));
       }
-      return docs.map((d) => ({
-        id: d._id.toString(),
-        ...mapEventDoc(d),
-        attendeesCount: countMap.get(String(d._id)) || 0,
-        myRsvp: myRegsMap.get(String(d._id)) || null,
-      }));
+      return docs.map((d, idx) => {
+        const organizerDoc = organizers[idx] || { _id: d.organizer };
+        return {
+          id: d._id.toString(),
+          ...mapEventDoc({ ...d, organizer: organizerDoc }),
+          attendeesCount: countMap.get(String(d._id)) || 0,
+          myRsvp: myRegsMap.get(String(d._id)) || null,
+        };
+      });
     },
 
     event: async (_p, { id }, ctx) => {
       if (!mongoose.isValidObjectId(id)) return null;
-      const doc = await Event.findById(id).populate('organizer').lean();
+      const doc = await Event.findById(id).lean();
       if (!doc) return null;
 
-      const attendeesCount = await Registration.countDocuments({ event: doc._id });
-      let myRsvp = null;
-      if (ctx.user) {
-        const reg = await Registration.findOne({ event: doc._id, user: ctx.user.id }).lean();
-        myRsvp = reg?.status || null;
-      }
+      const [organizer, attendeesCount, myReg] = await Promise.all([
+        ctx.loaders.userById.load(String(doc.organizer)),
+        Registration.countDocuments({ event: doc._id }),
+        ctx.user
+          ? Registration.findOne({ event: doc._id, user: ctx.user.id }).lean()
+          : Promise.resolve(null),
+      ]);
+
       return {
         id: doc._id.toString(),
-        ...mapEventDoc(doc),
+        ...mapEventDoc({ ...doc, organizer }),
         attendeesCount,
-        myRsvp,
+        myRsvp: myReg?.status || null,
       };
     },
 
@@ -103,16 +113,30 @@ export const createResolvers = () => ({
       };
     },
 
-    chatMessages: async (_p, { roomId, limit = 50, offset = 0 }) => {
+    // For legacy consumers; chat list still uses populate; optimized version provided in sendMessage flow
+    chatMessages: async (_p, { roomId, limit = 50, offset = 0 }, ctx) => {
       const msgs = await Message.find({ roomId })
         .sort({ createdAt: 1 })
         .skip(offset)
         .limit(Math.min(limit, 100))
-        .populate('user')
-        .populate('event')
         .lean();
 
-      return msgs.map(mapMessageDoc);
+      // Batch fetch users and events
+      const userIds = msgs.map((m) => String(m.user));
+      const eventIds = msgs.map((m) => (m.event ? String(m.event) : null));
+
+      const [users, events] = await Promise.all([
+        Promise.all(userIds.map((id) => ctx.loaders.userById.load(id))),
+        Promise.all(eventIds.map((id) => (id ? ctx.loaders.eventById.load(id) : Promise.resolve(null)))),
+      ]);
+
+      const enriched = msgs.map((m, idx) => {
+        const user = users[idx] || { _id: m.user };
+        const event = events[idx] || (m.event ? { _id: m.event } : null);
+        return mapMessageDoc({ ...m, user, event });
+      });
+
+      return enriched;
     },
   },
 
@@ -127,36 +151,37 @@ export const createResolvers = () => ({
         organizer: ctx.user.id,
       };
       const doc = await Event.create(payload);
-      const populated = await Event.findById(doc._id).populate('organizer').lean();
+      const organizer = await ctx.loaders.userById.load(String(ctx.user.id));
+      const mapped = {
+        id: doc._id.toString(),
+        ...mapEventDoc({ ...doc.toObject(), organizer }),
+        attendeesCount: 0,
+        myRsvp: null,
+      };
 
       // Publish event created
-      await pubsub.publish(TOPICS.EVENT_UPDATED, {
+      const emitter = ctx?.pubsub || pubsub;
+      await emitter.publish(TOPICS.EVENT_UPDATED, {
         eventUpdated: {
           action: 'created',
-          id: populated._id.toString(),
+          id: mapped.id,
           event: {
-            id: populated._id.toString(),
-            ...mapEventDoc(populated),
+            ...mapped,
           },
         },
       });
 
-      return {
-        id: populated._id.toString(),
-        ...mapEventDoc(populated),
-        attendeesCount: 0,
-        myRsvp: null,
-      };
+      return mapped;
     },
 
     updateEvent: async (_p, { id, input }, ctx) => {
       requireAuth(ctx);
-      if (!mongoose.isValidObjectId(id)) throw new Error('Invalid event id');
+      if (!mongoose.isValidObjectId(id)) throw Err.badRequest('Invalid event id');
 
       const existing = await Event.findById(id).lean();
-      if (!existing) throw new Error('Event not found');
+      if (!existing) throw Err.notFound('Event');
       if (String(existing.organizer) !== ctx.user.id && ctx.user.role !== 'admin') {
-        throw new Error('Not authorized to update this event');
+        throw Err.forbidden('Not authorized to update this event');
       }
 
       const updates = { ...input };
@@ -164,37 +189,37 @@ export const createResolvers = () => ({
       if (updates.startDate) updates.startDate = new Date(updates.startDate);
       if (updates.endDate) updates.endDate = new Date(updates.endDate);
 
-      const doc = await Event.findByIdAndUpdate(id, { $set: updates }, { new: true })
-        .populate('organizer')
-        .lean();
-      if (!doc) throw new Error('Event not found');
+      const updated = await Event.findByIdAndUpdate(id, { $set: updates }, { new: true }).lean();
+      if (!updated) throw Err.notFound('Event');
 
-      const attendeesCount = await Registration.countDocuments({ event: doc._id });
-      let myRsvp = null;
-      if (ctx.user) {
-        const reg = await Registration.findOne({ event: doc._id, user: ctx.user.id }).lean();
-        myRsvp = reg?.status || null;
-      }
+      const [organizer, attendeesCount, myReg] = await Promise.all([
+        ctx.loaders.userById.load(String(updated.organizer)),
+        Registration.countDocuments({ event: updated._id }),
+        ctx.user
+          ? Registration.findOne({ event: updated._id, user: ctx.user.id }).lean()
+          : Promise.resolve(null),
+      ]);
 
       // Publish event updated
-      await pubsub.publish(TOPICS.EVENT_UPDATED, {
+      const emitter = ctx?.pubsub || pubsub;
+      await emitter.publish(TOPICS.EVENT_UPDATED, {
         eventUpdated: {
           action: 'updated',
-          id: doc._id.toString(),
+          id: updated._id.toString(),
           event: {
-            id: doc._id.toString(),
-            ...mapEventDoc(doc),
+            id: updated._id.toString(),
+            ...mapEventDoc({ ...updated, organizer }),
             attendeesCount,
-            myRsvp,
+            myRsvp: myReg?.status || null,
           },
         },
       });
 
       return {
-        id: doc._id.toString(),
-        ...mapEventDoc(doc),
+        id: updated._id.toString(),
+        ...mapEventDoc({ ...updated, organizer }),
         attendeesCount,
-        myRsvp,
+        myRsvp: myReg?.status || null,
       };
     },
 
@@ -204,14 +229,15 @@ export const createResolvers = () => ({
       const doc = await Event.findById(id).lean();
       if (!doc) return false;
       if (String(doc.organizer) !== ctx.user.id && ctx.user.role !== 'admin') {
-        throw new Error('Not authorized to delete this event');
+        throw Err.forbidden('Not authorized to delete this event');
       }
       await Event.findByIdAndDelete(id);
       await Registration.deleteMany({ event: id });
       await Message.deleteMany({ event: id });
 
       // Publish event deleted
-      await pubsub.publish(TOPICS.EVENT_UPDATED, {
+      const emitter = ctx?.pubsub || pubsub;
+      await emitter.publish(TOPICS.EVENT_UPDATED, {
         eventUpdated: {
           action: 'deleted',
           id: String(id),
@@ -224,24 +250,28 @@ export const createResolvers = () => ({
 
     rsvp: async (_p, { eventId, status }, ctx) => {
       requireAuth(ctx);
-      if (!mongoose.isValidObjectId(eventId)) throw new Error('Invalid event id');
-      const ev = await Event.findById(eventId).populate('organizer').lean();
-      if (!ev) throw new Error('Event not found');
+      if (!mongoose.isValidObjectId(eventId)) throw Err.badRequest('Invalid event id');
+      const ev = await Event.findById(eventId).lean();
+      if (!ev) throw Err.notFound('Event');
       await Registration.findOneAndUpdate(
         { event: eventId, user: ctx.user.id },
         { $set: { status } },
         { upsert: true, new: true }
       );
-      const attendeesCount = await Registration.countDocuments({ event: eventId });
+      const [attendeesCount, organizer] = await Promise.all([
+        Registration.countDocuments({ event: eventId }),
+        ctx.loaders.userById.load(String(ev.organizer)),
+      ]);
 
       // Publish event RSVP change as update
-      await pubsub.publish(TOPICS.EVENT_UPDATED, {
+      const emitter = ctx?.pubsub || pubsub;
+      await emitter.publish(TOPICS.EVENT_UPDATED, {
         eventUpdated: {
           action: 'registration_changed',
           id: ev._id.toString(),
           event: {
             id: ev._id.toString(),
-            ...mapEventDoc(ev),
+            ...mapEventDoc({ ...ev, organizer }),
             attendeesCount,
             myRsvp: status,
           },
@@ -250,7 +280,7 @@ export const createResolvers = () => ({
 
       return {
         id: ev._id.toString(),
-        ...mapEventDoc(ev),
+        ...mapEventDoc({ ...ev, organizer }),
         attendeesCount,
         myRsvp: status,
       };
@@ -260,7 +290,7 @@ export const createResolvers = () => ({
       const { email, password, name } = input;
       const normalized = String(email).toLowerCase().trim();
       const existing = await User.findOne({ email: normalized }).lean();
-      if (existing) throw new Error('Email already in use');
+      if (existing) throw Err.conflict('Email already in use');
       const passwordHash = await hashPassword(password);
       const doc = await User.create({
         name: name || '',
@@ -276,9 +306,9 @@ export const createResolvers = () => ({
     login: async (_p, { email, password }) => {
       const normalized = String(email).toLowerCase().trim();
       const userDoc = await User.findOne({ email: normalized }).lean();
-      if (!userDoc) throw new Error('Invalid credentials');
+      if (!userDoc) throw Err.badRequest('Invalid credentials');
       const ok = await comparePassword(password, userDoc.passwordHash);
-      if (!ok) throw new Error('Invalid credentials');
+      if (!ok) throw Err.badRequest('Invalid credentials');
       const user = sanitizeUserDoc(userDoc);
       const token = signToken({ id: user.id, role: user.role, email: user.email, name: user.name });
       return { token, user };
@@ -296,11 +326,17 @@ export const createResolvers = () => ({
         payload.event = match[1];
       }
       const msg = await Message.create(payload);
-      const populated = await Message.findById(msg._id).populate('user').populate('event').lean();
-      const mapped = mapMessageDoc(populated);
+
+      const [user, event] = await Promise.all([
+        ctx.loaders.userById.load(String(ctx.user.id)),
+        msg.event ? ctx.loaders.eventById.load(String(msg.event)) : Promise.resolve(null),
+      ]);
+
+      const mapped = mapMessageDoc({ ...msg.toObject(), user, event });
 
       // Publish messageAdded for the specific room
-      await pubsub.publish(`${TOPICS.MESSAGE_ADDED}.${roomId}`, { messageAdded: mapped });
+      const emitter = ctx?.pubsub || pubsub;
+      await emitter.publish(`${TOPICS.MESSAGE_ADDED}.${roomId}`, { messageAdded: mapped });
 
       return mapped;
     },
@@ -322,7 +358,7 @@ export const createResolvers = () => ({
 // Helpers
 // PUBLIC_INTERFACE
 function requireAuth(ctx) {
-  if (!ctx.user) throw new Error('Not authenticated');
+  if (!ctx.user) throw Err.unauthenticated();
 }
 
 function sanitizeUserDoc(doc) {

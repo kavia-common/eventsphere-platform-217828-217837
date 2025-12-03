@@ -36,7 +36,7 @@ Optional:
 - CORS_ORIGIN (comma-separated origins or * for any)
 - WS_ENABLED (true|false)
 - HEALTHCHECK_PATH (default /healthz)
-- LOG_LEVEL (silent|error|warn|info|debug|trace)
+- LOG_LEVEL (silent|error|warn|info|debug|trace)  Controls pino log level
 
 ## Frontend integration
 
@@ -121,3 +121,29 @@ Available subscriptions:
 
 Environment:
 - WS_ENABLED=true enables the WebSocket server (default true).
+
+## Performance: DataLoaders
+
+- Context now includes per-request DataLoaders to prevent N+1 queries:
+  - loaders.userById: batch loads Users by id
+  - loaders.eventById: batch loads Events by id
+- Resolvers should prefer ctx.loaders.* instead of Model.findById in loops.
+
+Example:
+const user = await ctx.loaders.userById.load(userId);
+
+## Logging: Pino
+
+- Pino logger integrated with LOG_LEVEL (default info) and NODE_ENV.
+- In development, pretty logs are enabled; production emits JSON logs.
+- Access via ctx.log in resolvers or getLogger() in modules.
+
+ENV:
+- LOG_LEVEL: silent|error|warn|info|debug|trace
+
+## Standardized Errors
+
+- Use utils/errors to throw consistent errors with GraphQL extensions:
+  - errors.unauthenticated(), errors.forbidden(), errors.badRequest(msg), errors.notFound(resource), errors.conflict(msg)
+- Server maps any thrown error to GraphQLError via formatError, with safe extensions.
+

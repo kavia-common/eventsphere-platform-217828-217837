@@ -1,33 +1,47 @@
-import { getEnv } from '../utils/env.js';
 import { User } from '../models/index.js';
 import { getAuthFromRequest } from '../utils/auth.js';
-
-const LOG_LEVEL = getEnv('LOG_LEVEL', 'info');
-
-function log(level, msg, meta) {
-  const levels = ['silent','error','warn','info','debug','trace'];
-  const currentIdx = levels.indexOf(LOG_LEVEL) === -1 ? 3 : levels.indexOf(LOG_LEVEL);
-  const msgIdx = levels.indexOf(level) === -1 ? 3 : levels.indexOf(level);
-  if (msgIdx <= currentIdx && level !== 'silent') {
-    // eslint-disable-next-line no-console
-    console.log(`[gql-ctx:${level}] ${msg}`, meta ?? '');
-  }
-}
+import getLogger from '../utils/logger.js';
+import { createLoaders } from '../utils/loaders.js';
+import { errors } from '../utils/errors.js';
+import { getPubSub } from './resolvers.js';
 
 /**
  * PUBLIC_INTERFACE
- * Builds Apollo context per request: extracts Bearer token using utils/auth and returns user.
+ * Builds Apollo context per request:
+ * - extracts Bearer token using utils/auth and returns user
+ * - attaches per-request dataloaders
+ * - attaches logger child with request id (if present)
+ * - exposes pubsub for resolvers requiring it
+ * - exposes standardized error helpers
  */
 export async function buildContext({ req }) {
+  const logger = getLogger().child({
+    mod: 'gql-context',
+    requestId: req?.headers?.['x-request-id'] || undefined,
+  });
+
   try {
     const { user } = getAuthFromRequest(req);
+    const loaders = createLoaders();
     return {
       user,
       models: { User },
+      loaders,
+      log: logger,
+      pubsub: getPubSub(),
+      errors,
     };
   } catch (e) {
-    log('warn', 'Context build failed', e?.message || e);
-    return { user: null, models: { User } };
+    logger.warn({ err: e }, 'Context build failed');
+    const loaders = createLoaders();
+    return {
+      user: null,
+      models: { User },
+      loaders,
+      log: logger,
+      pubsub: getPubSub(),
+      errors,
+    };
   }
 }
 
