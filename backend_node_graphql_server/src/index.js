@@ -3,13 +3,20 @@ import cors from 'cors';
 import morgan from 'morgan';
 import { getEnv, requiredEnv } from './utils/env.js';
 import { connectDatabase, disconnectDatabase } from './db/connection.js';
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@apollo/server/express4';
+import { typeDefs } from './graphql/typeDefs.js';
+import { createResolvers } from './graphql/resolvers.js';
+import { buildContext } from './graphql/context.js';
 
 // Load env and configuration
 const PORT = Number(getEnv('PORT', 4000));
 const NODE_ENV = getEnv('NODE_ENV', 'development');
-const CORS_ORIGIN = getEnv('CORS_ORIGIN', '*');
 const HEALTHCHECK_PATH = getEnv('HEALTHCHECK_PATH', '/healthz');
-const WS_ENABLED = String(getEnv('WS_ENABLED', 'true')).toLowerCase() === 'true';
+
+// For CORS, allow the frontend origin; fallback to wildcard for dev.
+const FRONTEND_ORIGIN = getEnv('REACT_APP_FRONTEND_URL', '');
+const CORS_ORIGIN = FRONTEND_ORIGIN || getEnv('CORS_ORIGIN', '*');
 
 // Ensure critical envs are present
 try {
@@ -24,14 +31,16 @@ try {
 const app = express();
 
 // Middlewares
-app.use(cors({
-  origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN.split(',').map(s => s.trim()),
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN.split(',').map((s) => s.trim()),
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(morgan(NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Healthcheck endpoint
+// Healthcheck endpoint (must remain at HEALTHCHECK_PATH)
 /**
  * Healthcheck endpoint
  * GET {HEALTHCHECK_PATH}
@@ -42,9 +51,8 @@ app.get(HEALTHCHECK_PATH, async (req, res) => {
     status: 'ok',
     service: 'backend_node_graphql_server',
     env: NODE_ENV,
-    wsEnabled: WS_ENABLED,
     time: new Date().toISOString(),
-    db: 'unknown'
+    db: 'unknown',
   };
 
   try {
@@ -57,12 +65,12 @@ app.get(HEALTHCHECK_PATH, async (req, res) => {
   res.json(status);
 });
 
-// Placeholder root
+// Root info
 app.get('/', (req, res) => {
   res.json({
     name: 'EventSphere Backend',
-    message: 'GraphQL endpoint will be available at /graphql',
-    healthcheck: HEALTHCHECK_PATH
+    message: 'GraphQL endpoint is available at /graphql',
+    healthcheck: HEALTHCHECK_PATH,
   });
 });
 
@@ -71,10 +79,29 @@ async function start() {
   try {
     await connectDatabase();
 
-    // Placeholder: GraphQL server initialization should be added here later.
-    // e.g., using Apollo Server or graphql-yoga mounted at /graphql
+    // Initialize Apollo Server 4 with Express at /graphql
+    const server = new ApolloServer({
+      typeDefs,
+      resolvers: createResolvers(),
+      introspection: NODE_ENV !== 'production',
+    });
+    await server.start();
 
-    const server = app.listen(PORT, () => {
+    app.use(
+      '/graphql',
+      // Ensure CORS at route to handle preflight as well
+      cors({
+        origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN.split(',').map((s) => s.trim()),
+        credentials: true,
+      }),
+      express.json(),
+      expressMiddleware(server, {
+        // PUBLIC_INTERFACE
+        context: async (arg) => buildContext(arg),
+      })
+    );
+
+    const httpServer = app.listen(PORT, () => {
       // eslint-disable-next-line no-console
       console.log(`[startup] Server listening on port ${PORT} (env=${NODE_ENV})`);
     });
@@ -83,12 +110,18 @@ async function start() {
     const shutdown = async (signal) => {
       // eslint-disable-next-line no-console
       console.log(`[shutdown] Received ${signal}, closing server...`);
-      server.close(async () => {
+      httpServer.close(async () => {
+        try {
+          await server.stop();
+        } catch {}
         await disconnectDatabase();
         process.exit(0);
       });
       // Force exit if not closed within 10s
       setTimeout(async () => {
+        try {
+          await server.stop();
+        } catch {}
         await disconnectDatabase();
         process.exit(1);
       }, 10000).unref();
