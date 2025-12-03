@@ -1,16 +1,13 @@
-import React, { useEffect, useMemo, Suspense, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
-import { RouterProvider } from 'react-router-dom';
 import { ApolloProvider } from '@apollo/client';
 import createApolloClient from './apollo/client';
 import { AuthProvider } from './auth/AuthProvider';
-import Layout from './components/Layout';
-import router from './router';
 
 /**
  * PUBLIC_INTERFACE
- * App entry: sets theme attribute and mounts the Router with a Layout shell.
- * Wraps with ApolloProvider and AuthProvider. Uses central router config (src/router.jsx).
+ * App entry: sets theme attribute and provides global app providers.
+ * Router is mounted at entry (src/index.js) and routes are wrapped with Layout via router.jsx.
  */
 function App() {
   const [theme, setTheme] = useState('light');
@@ -32,14 +29,7 @@ function App() {
           >
             {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
           </button>
-          <Suspense fallback={<div className="p-6">Loading...</div>}>
-            {/* Provide global Layout shell around routed pages */}
-            <Layout />
-            {/* RouterProvider renders pages outside Layout by default; to keep Layout wrapping, use Layout inside routes.
-               For simplicity, we render Layout as persistent shell and pages render within main content cards. */}
-            <div className="hidden" aria-hidden />
-            <RouterProvider router={router} />
-          </Suspense>
+          {/* Routes and Layout are rendered by RouterProvider in index.js and defined in router.jsx */}
         </div>
       </AuthProvider>
     </ApolloProvider>
