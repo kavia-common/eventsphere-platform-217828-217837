@@ -2,8 +2,8 @@ import { gql } from 'graphql-tag';
 
 /**
  * PUBLIC_INTERFACE
- * GraphQL type definitions for core entities and minimal operations to support frontend scaffolding.
- * Includes: User, Event, Registration, Message types, and placeholder Queries/Mutations/Subscriptions.
+ * GraphQL type definitions for core entities, authentication, and operations.
+ * Includes: User, Event, Registration, Message types, AuthPayload, Queries/Mutations/Subscriptions.
  */
 export const typeDefs = gql`
   scalar Date

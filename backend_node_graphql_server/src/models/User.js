@@ -15,6 +15,7 @@ const { Schema, model } = mongoose;
  * - strict mode prevents undeclared fields
  * - indexes: unique index on email, and text index on name+email for search
  */
+// PUBLIC_INTERFACE
 const UserSchema = new Schema(
   {
     name: { type: String, trim: true, maxlength: 120 },

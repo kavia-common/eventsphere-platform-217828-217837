@@ -7,7 +7,7 @@ Minimal backend container skeleton with:
 - CORS + logging (morgan)
 - Healthcheck endpoint
 
-GraphQL setup (Apollo/other) will be added in subsequent steps.
+GraphQL setup includes JWT-based authentication, role-based guards, and secure mutations.
 
 ## Quick Start
 

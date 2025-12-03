@@ -135,6 +135,14 @@ export const createResolvers = () => ({
     updateEvent: async (_p, { id, input }, ctx) => {
       requireAuth(ctx);
       if (!mongoose.isValidObjectId(id)) throw new Error('Invalid event id');
+
+      // Ownership/admin guard
+      const existing = await Event.findById(id).lean();
+      if (!existing) throw new Error('Event not found');
+      if (String(existing.organizer) !== ctx.user.id && ctx.user.role !== 'admin') {
+        throw new Error('Not authorized to update this event');
+      }
+
       const updates = { ...input };
       if (updates.date) updates.date = new Date(updates.date);
       if (updates.startDate) updates.startDate = new Date(updates.startDate);
@@ -254,6 +262,7 @@ export const createResolvers = () => ({
 });
 
 // Helpers
+// PUBLIC_INTERFACE
 function requireAuth(ctx) {
   if (!ctx.user) throw new Error('Not authenticated');
 }
