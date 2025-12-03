@@ -44,7 +44,48 @@ Frontend expects:
 - HTTP: `${REACT_APP_BACKEND_URL}/graphql`
 - WS: `${REACT_APP_WS_URL}/graphql`
 
-This skeleton does not yet expose /graphql. In future steps, add Apollo Server or graphql-yoga at /graphql and enable WebSocket if WS_ENABLED=true.
+## Authentication (JWT) and RBAC
+
+- Register and Login mutations return:
+  {
+    "token": "<JWT>",
+    "user": { "id": "...", "email": "...", "name": "...", "role": "user|admin" }
+  }
+
+- Clients must send the token on subsequent requests via:
+  Authorization: Bearer <JWT>
+
+- Roles:
+  - user: can create events and modify/delete only those they organize.
+  - admin: can update/delete any event.
+
+- Example GraphQL:
+
+mutation Register {
+  register(input: { name: "Demo", email: "demo@example.com", password: "password123" }) {
+    token
+    user { id email role }
+  }
+}
+
+mutation Login {
+  login(email: "demo@example.com", password: "password123") {
+    token
+    user { id email role }
+  }
+}
+
+query Me {
+  me { id email role }
+}
+
+mutation CreateEvent {
+  createEvent(input: { title: "My Event", type: "online" }) {
+    id
+    title
+    organizer { id email }
+  }
+}
 
 ## Scripts
 

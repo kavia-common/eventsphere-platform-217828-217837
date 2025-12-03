@@ -103,12 +103,14 @@ async function insertMessageOnce({ roomId, event, user, text }) {
 }
 
 async function seed() {
-  // Users
+  // Users with deterministic demo password "password123" (hashed)
+  const bcrypt = (await import('bcryptjs')).default;
+  const demoPassword = 'password123';
+  const hash = await bcrypt.hash(demoPassword, 10);
   const users = [
-    // password hashes can be generated later; store placeholder demo hashes to avoid bcrypt dependency here
-    { name: 'Alice Johnson', email: 'alice@example.com', passwordHash: '$2a$10$t5Gg9i1yQa2O7kGfF3W1Z.SAMPLEPLACEHOLDER111111111111111111111', avatarUrl: '', role: 'admin' },
-    { name: 'Bob Smith', email: 'bob@example.com', passwordHash: '$2a$10$t5Gg9i1yQa2O7kGfF3W1Z.SAMPLEPLACEHOLDER222222222222222222222', avatarUrl: '', role: 'user' },
-    { name: 'Carol Lee', email: 'carol@example.com', passwordHash: '$2a$10$t5Gg9i1yQa2O7kGfF3W1Z.SAMPLEPLACEHOLDER333333333333333333333', avatarUrl: '', role: 'user' },
+    { name: 'Alice Johnson', email: 'alice@example.com', passwordHash: hash, avatarUrl: '', role: 'admin' },
+    { name: 'Bob Smith', email: 'bob@example.com', passwordHash: hash, avatarUrl: '', role: 'user' },
+    { name: 'Carol Lee', email: 'carol@example.com', passwordHash: hash, avatarUrl: '', role: 'user' },
   ];
 
   const createdUsers = {};

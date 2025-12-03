@@ -1,21 +1,16 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { User, Event, Registration, Message } from '../models/index.js';
-import { requiredEnv } from '../utils/env.js';
-
-const JWT_SECRET = requiredEnv('JWT_SECRET');
+import { comparePassword, hashPassword, signToken } from '../utils/auth.js';
 
 /**
  * PUBLIC_INTERFACE
  * Build GraphQL resolvers object. Uses models via direct imports and current user injected in context.
+ * Ensures JWT utils are used and mutations enforce owner/admin RBAC.
  */
 export const createResolvers = () => ({
   Query: {
-    // Returns the authenticated user if any
     me: async (_p, _a, ctx) => ctx.user || null,
 
-    // Events list with simple filters
     events: async (_p, args, ctx) => {
       const { query, type, afterDate, limit = 24, offset = 0 } = args;
       const filter = {};
@@ -23,7 +18,6 @@ export const createResolvers = () => ({
       if (afterDate) {
         const d = new Date(afterDate);
         if (!Number.isNaN(d.getTime())) {
-          // Consider both single date and range start
           filter.$or = [{ date: { $gte: d } }, { startDate: { $gte: d } }];
         }
       }
@@ -37,11 +31,10 @@ export const createResolvers = () => ({
         .populate('organizer')
         .lean();
 
-      // Compute attendeesCount and myRsvp fields on the fly
       const ids = docs.map((d) => d._id);
       const counts = await Registration.aggregate([
         { $match: { event: { $in: ids } } },
-        { $group: { _id: '$event', c: { $sum: 1 } } }
+        { $group: { _id: '$event', c: { $sum: 1 } } },
       ]);
       const countMap = new Map(counts.map((c) => [String(c._id), c.c]));
       let myRegsMap = new Map();
@@ -57,7 +50,6 @@ export const createResolvers = () => ({
       }));
     },
 
-    // Single event by id
     event: async (_p, { id }, ctx) => {
       if (!mongoose.isValidObjectId(id)) return null;
       const doc = await Event.findById(id).populate('organizer').lean();
@@ -77,7 +69,6 @@ export const createResolvers = () => ({
       };
     },
 
-    // Basic static summary; could be enhanced later
     dashboardSummary: async () => {
       const [totalEvents, totalRegistrations, activeUsersDocs, recentEventsDocs] = await Promise.all([
         Event.countDocuments(),
@@ -88,7 +79,7 @@ export const createResolvers = () => ({
       return {
         totalEvents,
         totalRegistrations,
-        revenue: Math.floor(totalRegistrations * 20), // placeholder computation
+        revenue: Math.floor(totalRegistrations * 20),
         activeUsers: activeUsersDocs.length,
         recentEvents: recentEventsDocs.map((d) => ({
           id: d._id.toString(),
@@ -97,7 +88,6 @@ export const createResolvers = () => ({
       };
     },
 
-    // Recent messages in a room
     chatMessages: async (_p, { roomId, limit = 50, offset = 0 }) => {
       const msgs = await Message.find({ roomId })
         .sort({ createdAt: 1 })
@@ -112,7 +102,6 @@ export const createResolvers = () => ({
   },
 
   Mutation: {
-    // Create Event, organizer = current user
     createEvent: async (_p, { input }, ctx) => {
       requireAuth(ctx);
       const payload = {
@@ -136,7 +125,6 @@ export const createResolvers = () => ({
       requireAuth(ctx);
       if (!mongoose.isValidObjectId(id)) throw new Error('Invalid event id');
 
-      // Ownership/admin guard
       const existing = await Event.findById(id).lean();
       if (!existing) throw new Error('Event not found');
       if (String(existing.organizer) !== ctx.user.id && ctx.user.role !== 'admin') {
@@ -172,7 +160,6 @@ export const createResolvers = () => ({
       if (!mongoose.isValidObjectId(id)) return false;
       const doc = await Event.findById(id).lean();
       if (!doc) return false;
-      // allow deletion if organizer is current user or admin
       if (String(doc.organizer) !== ctx.user.id && ctx.user.role !== 'admin') {
         throw new Error('Not authorized to delete this event');
       }
@@ -203,27 +190,29 @@ export const createResolvers = () => ({
 
     register: async (_p, { input }) => {
       const { email, password, name } = input;
-      const existing = await User.findOne({ email: String(email).toLowerCase().trim() }).lean();
+      const normalized = String(email).toLowerCase().trim();
+      const existing = await User.findOne({ email: normalized }).lean();
       if (existing) throw new Error('Email already in use');
-      const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await hashPassword(password);
       const doc = await User.create({
         name: name || '',
-        email: String(email).toLowerCase().trim(),
+        email: normalized,
         passwordHash,
         role: 'user',
       });
-      const user = sanitizeUserDoc((await User.findById(doc._id).lean()));
-      const token = jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+      const user = sanitizeUserDoc(await User.findById(doc._id).lean());
+      const token = signToken({ id: user.id, role: user.role, email: user.email, name: user.name });
       return { token, user };
     },
 
     login: async (_p, { email, password }) => {
-      const userDoc = await User.findOne({ email: String(email).toLowerCase().trim() }).lean();
+      const normalized = String(email).toLowerCase().trim();
+      const userDoc = await User.findOne({ email: normalized }).lean();
       if (!userDoc) throw new Error('Invalid credentials');
-      const ok = await bcrypt.compare(password, userDoc.passwordHash);
+      const ok = await comparePassword(password, userDoc.passwordHash);
       if (!ok) throw new Error('Invalid credentials');
       const user = sanitizeUserDoc(userDoc);
-      const token = jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+      const token = signToken({ id: user.id, role: user.role, email: user.email, name: user.name });
       return { token, user };
     },
 
@@ -234,19 +223,16 @@ export const createResolvers = () => ({
         user: ctx.user.id,
         text,
       };
-      // If room is event:<id>, attach event ref when valid
       const match = /^event:(.+)$/.exec(roomId);
       if (match && mongoose.isValidObjectId(match[1])) {
         payload.event = match[1];
       }
       const msg = await Message.create(payload);
       const populated = await Message.findById(msg._id).populate('user').populate('event').lean();
-      // For now, subscriptions are stubbed; future step will publish via PubSub
       return mapMessageDoc(populated);
     },
   },
 
-  // Stub subscriptions; will be wired with a PubSub in future WS step
   Subscription: {
     eventUpdated: {
       subscribe: () => {

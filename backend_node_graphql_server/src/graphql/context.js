@@ -1,8 +1,7 @@
-import jwt from 'jsonwebtoken';
-import { getEnv, requiredEnv } from '../utils/env.js';
+import { getEnv } from '../utils/env.js';
 import { User } from '../models/index.js';
+import { getAuthFromRequest } from '../utils/auth.js';
 
-const JWT_SECRET = requiredEnv('JWT_SECRET');
 const LOG_LEVEL = getEnv('LOG_LEVEL', 'info');
 
 function log(level, msg, meta) {
@@ -17,36 +16,19 @@ function log(level, msg, meta) {
 
 /**
  * PUBLIC_INTERFACE
- * Builds Apollo context per request: extracts Bearer token, verifies, and loads user.
+ * Builds Apollo context per request: extracts Bearer token using utils/auth and returns user.
  */
 export async function buildContext({ req }) {
-  let user = null;
   try {
-    const auth = req?.headers?.authorization || req?.headers?.Authorization;
-    if (auth && String(auth).startsWith('Bearer ')) {
-      const token = String(auth).slice(7).trim();
-      const payload = jwt.verify(token, JWT_SECRET);
-      if (payload?.sub) {
-        const doc = await User.findById(payload.sub).lean();
-        if (doc) {
-          user = {
-            id: doc._id.toString(),
-            email: doc.email,
-            name: doc.name || '',
-            role: doc.role || 'user',
-          };
-        }
-      }
-    }
+    const { user } = getAuthFromRequest(req);
+    return {
+      user,
+      models: { User },
+    };
   } catch (e) {
-    log('warn', 'JWT parse/verify failed', e?.message || e);
+    log('warn', 'Context build failed', e?.message || e);
+    return { user: null, models: { User } };
   }
-
-  return {
-    user,
-    // Expose raw models if needed by resolvers
-    models: { User },
-  };
 }
 
 export default buildContext;
