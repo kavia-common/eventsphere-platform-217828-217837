@@ -1,0 +1,4 @@
+{
+    "command": "npm run test",
+    "working_directory": "/home/kavia/workspace/code-generation/eventsphere-platform-217828-217837/frontend_react_tailwind_app"
+}
