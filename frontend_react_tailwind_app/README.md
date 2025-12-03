@@ -17,6 +17,7 @@ Modern, responsive React SPA for the EventSphere platform. Connects to a GraphQL
        - Dev example: ws://localhost:4000
        - With SSL: wss://your-backend.onrender.com
    - Optional: Adjust REACT_APP_API_BASE, REACT_APP_FRONTEND_URL, and other flags to suit your environment.
+   - Ensure backend CORS_ORIGIN includes your frontend origin (e.g., http://localhost:3000) and that both expose/expect /graphql for HTTP and WS.
 
 3) Run the app
    npm start

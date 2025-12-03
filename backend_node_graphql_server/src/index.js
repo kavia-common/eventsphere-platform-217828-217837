@@ -21,9 +21,14 @@ const NODE_ENV = getEnv('NODE_ENV', 'development');
 const HEALTHCHECK_PATH = getEnv('HEALTHCHECK_PATH', '/healthz');
 const WS_ENABLED = String(getEnv('WS_ENABLED', 'true')).toLowerCase() !== 'false';
 
-// For CORS, allow the frontend origin; fallback to wildcard for dev.
+/**
+ * CORS handling:
+ * - Preferred: CORS_ORIGIN (comma-separated origins) from env.
+ * - Fallback: REACT_APP_FRONTEND_URL (single origin) if CORS_ORIGIN is not set.
+ * - Dev default: '*' (allows any, suitable for local iteration; set explicit origins for prod).
+ */
 const FRONTEND_ORIGIN = getEnv('REACT_APP_FRONTEND_URL', '');
-const CORS_ORIGIN = FRONTEND_ORIGIN || getEnv('CORS_ORIGIN', '*');
+const CORS_ORIGIN = getEnv('CORS_ORIGIN', FRONTEND_ORIGIN || '*');
 
 // Ensure critical envs are present
 try {

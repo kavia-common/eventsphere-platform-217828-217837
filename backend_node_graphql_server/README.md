@@ -44,6 +44,16 @@ Frontend expects:
 - HTTP: `${REACT_APP_BACKEND_URL}/graphql`
 - WS: `${REACT_APP_WS_URL}/graphql` (graphql-ws protocol)
 
+Environment cross-links:
+- Set CORS_ORIGIN to include your frontend URL (e.g., http://localhost:3000). Multiple origins supported via comma-separated list.
+- HEALTHCHECK_PATH should remain consistent with frontend REACT_APP_HEALTHCHECK_PATH (default /healthz).
+- For local dev:
+  - Backend: PORT=4000, CORS_ORIGIN=http://localhost:3000
+  - Frontend: REACT_APP_BACKEND_URL=http://localhost:4000, REACT_APP_WS_URL=ws://localhost:4000
+- The server will also accept REACT_APP_FRONTEND_URL to infer CORS if CORS_ORIGIN is not set, but CORS_ORIGIN takes precedence.
+
+See .env.example in both backend and frontend for canonical variables.
+
 ## Authentication (JWT) and RBAC
 
 - Register and Login mutations return:
