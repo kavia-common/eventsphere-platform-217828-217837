@@ -1,82 +1,100 @@
-# Lightweight React Template for KAVIA
+# EventSphere Frontend (React + Tailwind + Apollo)
 
-This project provides a minimal React template with a clean, modern UI and minimal dependencies.
+Modern, responsive React SPA for the EventSphere platform. Connects to a GraphQL backend for events, authentication, chat (subscriptions), and dashboards. Styled with TailwindCSS using the "Ocean Professional" theme.
 
-## Features
+## Quick Start
 
-- **Lightweight**: No heavy UI frameworks - uses only vanilla CSS and React
-- **Modern UI**: Clean, responsive design with KAVIA brand styling
-- **Fast**: Minimal dependencies for quick loading times
-- **Simple**: Easy to understand and modify
+1) Install dependencies
+   npm install
 
-## Getting Started
+2) Configure environment
+   - Copy .env.example to .env
+   - Set the following at minimum:
+     - REACT_APP_BACKEND_URL: HTTP base of your GraphQL server (Apollo uses `${REACT_APP_BACKEND_URL}/graphql`)
+       - Dev example: http://localhost:4000
+       - Render/Prod example: https://your-backend.onrender.com
+     - REACT_APP_WS_URL: WS base for subscriptions (Apollo uses `${REACT_APP_WS_URL}/graphql`)
+       - Dev example: ws://localhost:4000
+       - With SSL: wss://your-backend.onrender.com
+   - Optional: Adjust REACT_APP_API_BASE, REACT_APP_FRONTEND_URL, and other flags to suit your environment.
 
-In the project directory, you can run:
+3) Run the app
+   npm start
+   - Opens http://localhost:3000 by default (change via REACT_APP_PORT)
 
-### `npm start`
+4) Build for production
+   npm run build
 
-Runs the app in development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Environment Variables
 
-### `npm test`
+Create React App only exposes variables prefixed with REACT_APP_. The app expects these keys (see .env.example for defaults):
 
-Launches the test runner in interactive watch mode.
+- REACT_APP_API_BASE: Optional convenience alias for API base URL
+- REACT_APP_BACKEND_URL: Base HTTP URL for GraphQL (Apollo appends /graphql)
+- REACT_APP_FRONTEND_URL: Absolute URL for this frontend
+- REACT_APP_WS_URL: Base WS/WSS URL for GraphQL subscriptions (Apollo appends /graphql)
+- REACT_APP_NODE_ENV: development | production | test (affects Apollo devtools)
+- REACT_APP_NEXT_TELEMETRY_DISABLED: Keeps telemetry off in monorepos/CI (1/0)
+- REACT_APP_ENABLE_SOURCE_MAPS: Enable source maps in builds (true/false)
+- REACT_APP_PORT: Dev server port (default 3000)
+- REACT_APP_TRUST_PROXY: If app runs behind reverse proxies/CDNs (true/false)
+- REACT_APP_LOG_LEVEL: Client log detail (silent|error|warn|info|debug|trace)
+- REACT_APP_HEALTHCHECK_PATH: Path used by health checks (/healthz)
+- REACT_APP_FEATURE_FLAGS: Comma-separated features (e.g., chat,analytics)
+- REACT_APP_EXPERIMENTS_ENABLED: Toggle experimental UI (true/false)
 
-### `npm run build`
+Important endpoint notes:
+- Apollo Client builds endpoints by appending /graphql:
+  - HTTP: `${REACT_APP_BACKEND_URL}/graphql`
+  - WS: `${REACT_APP_WS_URL}/graphql`
+- Ensure your backend exposes both HTTP and WS endpoints and CORS allows the frontend origin.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Available Routes
 
-## Customization
+- /            Home
+- /events      Landing for events
+- /events/list Filterable events list (GraphQL)
+- /events/new  Create event (Protected)
+- /events/:id  Event details (GraphQL + RSVP)
+- /dashboard   Dashboard (Protected)
+- /chat        Real-time chat (Protected, GraphQL subscriptions)
+- /profile     Profile (Protected)
+- /login       Login
+- /register    Register
 
-### Colors
+Protected routes:
+- Routes wrapped with ProtectedRoute require a valid JWT in localStorage under key auth_token. After login, user is redirected to the originally requested route.
 
-The main brand colors are defined as CSS variables in `src/App.css`:
+## Apollo Client
 
-```css
-:root {
-  --kavia-orange: #E87A41;
-  --kavia-dark: #1A1A1A;
-  --text-color: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(255, 255, 255, 0.1);
-}
-```
+- Configured in src/apollo/client.js with split links:
+  - HTTP (queries/mutations) via REACT_APP_BACKEND_URL
+  - WS (subscriptions) via REACT_APP_WS_URL
+- Adds Authorization header (Bearer <token>) from localStorage.auth_token
+- connectToDevTools enabled when REACT_APP_NODE_ENV !== 'production'
 
-### Components
+## TailwindCSS Theme
 
-This template uses pure HTML/CSS components instead of a UI framework. You can find component styles in `src/App.css`. 
+- Tailwind config sets "Ocean Professional" palette:
+  - primary: #2563EB
+  - secondary/success: #F59E0B
+  - error: #EF4444
+- Utility components:
+  - .btn-primary, .card defined in src/index.css
+- Global gradient background via from-blue-500/10 to-gray-50
 
-Common components include:
-- Buttons (`.btn`, `.btn-large`)
-- Container (`.container`)
-- Navigation (`.navbar`)
-- Typography (`.title`, `.subtitle`, `.description`)
+## Scripts
 
-## Learn More
+- npm start   Start CRA dev server
+- npm test    Run tests (Jest)
+- npm run build  Production build
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Troubleshooting
 
-### Code Splitting
+- Ensure REACT_APP_BACKEND_URL and REACT_APP_WS_URL are correct and reachable.
+- For secure deployments use wss:// for WS endpoint.
+- CORS: Backend should allow the frontend origin and headers (Authorization).
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## License
 
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+MIT (or project-specific)
