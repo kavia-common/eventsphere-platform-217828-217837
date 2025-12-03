@@ -8,9 +8,9 @@ import router from './router';
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    {/* Provide Router at the top level so all Links/NavLinks have context */}
-    <RouterProvider router={router} />
-    {/* App contains global providers (Apollo/Auth) and shared UI, now rendered via router layout */}
-    <App />
+    {/* Mount the Router exactly once and render the app within it */}
+    <RouterProvider router={router}>
+      <App />
+    </RouterProvider>
   </React.StrictMode>
 );

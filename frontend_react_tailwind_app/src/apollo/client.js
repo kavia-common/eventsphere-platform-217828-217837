@@ -69,7 +69,8 @@ export const createApolloClient = () => {
     cache: new InMemoryCache(),
     // New Apollo devtools integration option replaces deprecated connectToDevTools
     devtools: {
-      enabled: process.env.REACT_APP_NODE_ENV !== 'production',
+      // Use standard NODE_ENV to align with CRA and Apollo tooling
+      enabled: process.env.NODE_ENV !== 'production',
     },
   });
 
